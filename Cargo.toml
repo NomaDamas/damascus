@@ -1,0 +1,42 @@
+[package]
+name = "damascus"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Forge frontier-grade code from local, open-source models via verify-gated test-time scaling."
+license = "MIT"
+repository = "https://github.com/NomaDamas/damascus"
+homepage = "https://github.com/NomaDamas/damascus"
+readme = "README.md"
+keywords = ["llm", "coding-agent", "harness", "local-llm", "test-time-scaling"]
+categories = ["command-line-utilities", "development-tools"]
+authors = ["NomaDamas"]
+
+[[bin]]
+name = "damascus"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "fs", "time"] }
+futures = "0.3"
+owo-colors = "4"
+indicatif = "0.17"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+walkdir = "2"
+similar = "2"
+dirs = "5"
+textwrap = "0.16"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

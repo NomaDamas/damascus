@@ -1,0 +1,10 @@
+/target
+**/target
+.damascus/
+*.log
+
+# local secrets / configs that may contain keys
+damascus.local.toml
+
+# GJC harness state (not part of the project)
+.gjc/

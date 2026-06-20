@@ -1,0 +1,24 @@
+# Example config for the is_prime walkthrough, using local Ollama models.
+# Adjust the model ids to whatever you have pulled (`ollama list`).
+
+[providers.local]
+base_url = "http://localhost:11434/v1"
+
+[models]
+planner  = "local/gemma4:e4b"
+drafter  = "local/qwen2.5-coder:7b"
+judge    = "local/gemma4:e4b"
+repairer = "local/qwen2.5-coder:7b"
+
+[scaling]
+candidates = 4
+repair_rounds = 2
+max_recursion = 1
+max_steps = 6
+temperature = 0.3
+temperature_step = 0.25
+
+[verify]
+build = "cargo build"
+test = "cargo test"
+timeout_secs = 120
