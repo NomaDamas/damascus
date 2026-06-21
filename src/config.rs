@@ -86,6 +86,7 @@ impl ModelRoles {
 
 /// The levers that trade inference for quality.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ScalingConfig {
     /// Best-of-N: candidate edit-sets generated per step.
     pub candidates: usize,
@@ -100,20 +101,25 @@ pub struct ScalingConfig {
     /// Added per extra candidate to diversify samples.
     pub temperature_step: f32,
     /// Optional per-call output token cap.
-    #[serde(default)]
     pub max_tokens: Option<u32>,
+    /// Max concurrent model requests in flight (the throughput knob).
+    pub concurrency: usize,
+    /// Exploration-track temperature for the high-temp half of the rollout.
+    pub explore_temperature: f32,
 }
 
 impl Default for ScalingConfig {
     fn default() -> Self {
         ScalingConfig {
-            candidates: 3,
+            candidates: 6,
             repair_rounds: 2,
             max_recursion: 2,
             max_steps: 40,
-            temperature: 0.4,
-            temperature_step: 0.25,
+            temperature: 0.3,
+            temperature_step: 0.2,
             max_tokens: None,
+            concurrency: default_concurrency(),
+            explore_temperature: default_explore_temp(),
         }
     }
 }
@@ -122,6 +128,26 @@ impl ScalingConfig {
     /// Temperature for the i-th candidate (0-based), clamped to a sane ceiling.
     pub fn temperature_for(&self, i: usize) -> f32 {
         (self.temperature + self.temperature_step * i as f32).min(1.3)
+    }
+
+    /// Two-track schedule: the lower half of the rollout exploits around
+    /// `temperature` (focused), the upper half explores around
+    /// `explore_temperature` (diverse). Returns one temperature per candidate.
+    pub fn track_temperatures(&self, n: usize) -> Vec<f32> {
+        if n == 0 {
+            return Vec::new();
+        }
+        let focus = n.div_ceil(2);
+        (0..n)
+            .map(|i| {
+                if i < focus {
+                    (self.temperature + self.temperature_step * i as f32).min(1.1)
+                } else {
+                    let j = i - focus;
+                    (self.explore_temperature + 0.1 * j as f32).min(1.5)
+                }
+            })
+            .collect()
     }
 }
 
@@ -144,6 +170,14 @@ pub struct VerifyConfig {
 
 fn default_timeout() -> u64 {
     600
+}
+
+fn default_concurrency() -> usize {
+    8
+}
+
+fn default_explore_temp() -> f32 {
+    0.9
 }
 
 impl Default for VerifyConfig {
@@ -238,12 +272,14 @@ judge    = "local/qwen2.5-coder:7b"
 repairer = "local/qwen2.5-coder:7b"
 
 [scaling]
-candidates = 3        # best-of-N samples per step
+candidates = 8        # high-throughput best-of-N: sample many, let the filter pick
 repair_rounds = 2     # reflexion retries when nothing passes
 max_recursion = 2     # how deep a hard step may be re-decomposed
 max_steps = 40        # global runaway guard
-temperature = 0.4     # base drafter temperature
-temperature_step = 0.25  # added per candidate for diversity
+temperature = 0.3     # focus-track base temperature
+temperature_step = 0.2   # focus-track ramp per candidate
+explore_temperature = 0.9  # explore-track temperature (the diverse half)
+concurrency = 8       # max model requests in flight (throughput knob)
 
 [verify]
 # These are the forcing functions. A change is accepted only if they pass.
@@ -277,7 +313,7 @@ repairer = "local/m"
     fn parses_and_defaults() {
         let cfg: Config = toml::from_str(sample()).unwrap();
         cfg.validate().unwrap();
-        assert_eq!(cfg.scaling.candidates, 3);
+        assert_eq!(cfg.scaling.candidates, 6);
         assert_eq!(cfg.verify.timeout_secs, 600);
     }
 
@@ -291,8 +327,20 @@ repairer = "local/m"
     #[test]
     fn temperature_ramps_and_clamps() {
         let s = ScalingConfig::default();
-        assert!((s.temperature_for(0) - 0.4).abs() < 1e-6);
+        assert!((s.temperature_for(0) - 0.3).abs() < 1e-6);
         assert!(s.temperature_for(100) <= 1.3);
+    }
+
+    #[test]
+    fn two_track_temps_split_focus_and_explore() {
+        let s = ScalingConfig::default();
+        let temps = s.track_temperatures(6);
+        assert_eq!(temps.len(), 6);
+        // focus half starts at base temperature
+        assert!((temps[0] - 0.3).abs() < 1e-6);
+        // explore half is hotter than the focus base
+        assert!(temps[5] >= s.explore_temperature);
+        assert!(temps.iter().all(|t| *t <= 1.5));
     }
 
     #[test]

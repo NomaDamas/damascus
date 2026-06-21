@@ -1,0 +1,1 @@
+Implement the pop method of Stack in src/stack.rs so all tests pass. Do not modify the tests.

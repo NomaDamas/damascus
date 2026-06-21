@@ -8,7 +8,7 @@ use crate::config::Config;
 use crate::prompts;
 use crate::provider::{ChatProvider, ChatRequest, Message};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Step {
     pub title: String,
     #[serde(default)]
@@ -17,6 +17,17 @@ pub struct Step {
     /// global test gate for this step when present.
     #[serde(default)]
     pub check: Option<String>,
+    /// Target file for this leaf (enables AST slicing + micro-patch scope).
+    #[serde(default)]
+    pub file: Option<String>,
+    /// Target symbol within `file` (enables a tight slice + contract).
+    #[serde(default)]
+    pub symbol: Option<String>,
+    /// Whether the target symbol's signature must be preserved. Defaults to true
+    /// when a symbol is targeted (implement-the-body tasks); set false to allow
+    /// a deliberate signature change.
+    #[serde(default)]
+    pub keep_signature: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -52,6 +63,7 @@ pub async fn make_plan(
             title: task.chars().take(80).collect(),
             detail: task.to_string(),
             check: None,
+            ..Default::default()
         }],
     }))
 }

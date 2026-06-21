@@ -1,6 +1,6 @@
 [package]
 name = "damascus"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.80"
 description = "Forge frontier-grade code from local, open-source models via verify-gated test-time scaling."
@@ -32,6 +32,12 @@ walkdir = "2"
 similar = "2"
 dirs = "5"
 textwrap = "0.16"
+tree-sitter = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-python = "0.23"
+tree-sitter-javascript = "0.23"
+tree-sitter-typescript = "0.23"
+tree-sitter-go = "0.25"
 
 [dev-dependencies]
 tempfile = "3"

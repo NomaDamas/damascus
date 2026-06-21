@@ -130,49 +130,71 @@ pub enum ChangeKind {
     Modified,
 }
 
-/// Apply every block to the tree rooted at `root`. Returns an error if any block
-/// cannot be applied unambiguously — that failure is *signal*, not noise: it
-/// tells the repair loop the candidate was malformed.
-pub fn apply_blocks(root: &Path, blocks: &[EditBlock]) -> Result<ApplyReport> {
+/// The in-memory result of applying an edit set: final content per file plus a
+/// change report. Nothing is written to disk.
+#[derive(Debug, Default, Clone)]
+pub struct Changes {
+    /// Relative path -> final file content (with a trailing newline).
+    pub contents: BTreeMap<String, String>,
+    pub report: ApplyReport,
+}
+
+/// Compute the result of applying every block, reading current files from `root`
+/// but writing nothing. Multiple blocks targeting the same file are applied
+/// sequentially. Returns an error if any block cannot be applied unambiguously —
+/// that failure is *signal* for the repair loop, not noise.
+pub fn compute_changes(root: &Path, blocks: &[EditBlock]) -> Result<Changes> {
     if blocks.is_empty() {
         bail!("no edit blocks found in model output");
     }
+    let mut contents: BTreeMap<String, String> = BTreeMap::new();
+    let mut existed: BTreeMap<String, bool> = BTreeMap::new();
     let mut report = ApplyReport::default();
+
     for b in blocks {
         let abs = safe_join(root, &b.path)?;
-        let existed = abs.exists();
-        let current = if existed {
-            std::fs::read_to_string(&abs).map_err(|e| anyhow!("reading {}: {e}", b.path))?
+        let current = if let Some(c) = contents.get(&b.path) {
+            c.clone()
         } else {
-            String::new()
+            let was = abs.exists();
+            existed.insert(b.path.clone(), was);
+            if was {
+                std::fs::read_to_string(&abs).map_err(|e| anyhow!("reading {}: {e}", b.path))?
+            } else {
+                String::new()
+            }
         };
 
         let new_content = if b.search.trim().is_empty() {
-            // Empty SEARCH => create/overwrite with the replace body.
             b.replace.clone()
         } else {
-            let replaced = replace_once(&current, &b.search, &b.replace)
-                .ok_or_else(|| anyhow!("SEARCH text not found (or ambiguous) in `{}`", b.path))?;
-            replaced
+            replace_once(&current, &b.search, &b.replace)
+                .ok_or_else(|| anyhow!("SEARCH text not found (or ambiguous) in `{}`", b.path))?
         };
 
+        contents.insert(b.path.clone(), ensure_final_newline(&new_content));
+        report.touched_lines += b.replace.lines().count().max(1);
+        let kind = if *existed.get(&b.path).unwrap_or(&true) {
+            ChangeKind::Modified
+        } else {
+            ChangeKind::Created
+        };
+        report.files_changed.insert(b.path.clone(), kind);
+    }
+    Ok(Changes { contents, report })
+}
+
+/// Apply every block to the tree rooted at `root`, writing the results to disk.
+pub fn apply_blocks(root: &Path, blocks: &[EditBlock]) -> Result<ApplyReport> {
+    let changes = compute_changes(root, blocks)?;
+    for (rel, content) in &changes.contents {
+        let abs = safe_join(root, rel)?;
         if let Some(parent) = abs.parent() {
             std::fs::create_dir_all(parent).ok();
         }
-        std::fs::write(&abs, ensure_final_newline(&new_content))
-            .map_err(|e| anyhow!("writing {}: {e}", b.path))?;
-
-        report.touched_lines += b.replace.lines().count().max(1);
-        report.files_changed.insert(
-            b.path.clone(),
-            if existed {
-                ChangeKind::Modified
-            } else {
-                ChangeKind::Created
-            },
-        );
+        std::fs::write(&abs, content).map_err(|e| anyhow!("writing {rel}: {e}"))?;
     }
-    Ok(report)
+    Ok(changes.report)
 }
 
 fn ensure_final_newline(s: &str) -> String {

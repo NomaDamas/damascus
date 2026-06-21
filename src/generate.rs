@@ -3,7 +3,7 @@
 //! ensemble of models) instead of relying on one strong model.
 
 use anyhow::Result;
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 
 use crate::config::Config;
 use crate::edits::{parse_blocks, EditBlock};
@@ -29,27 +29,33 @@ pub async fn sample_candidates(
     user: String,
     n: usize,
 ) -> Vec<Candidate> {
-    let futures = (0..n).map(|i| {
-        let req = ChatRequest {
-            model: model.clone(),
-            messages: vec![Message::system(system.clone()), Message::user(user.clone())],
-            temperature: cfg.scaling.temperature_for(i),
-            max_tokens: cfg.scaling.max_tokens,
-        };
-        async move {
-            let temp = req.temperature;
-            match provider.complete(req).await {
-                Ok(raw) => match parse_blocks(&raw) {
-                    Ok(blocks) if !blocks.is_empty() => Some((raw, blocks, temp)),
-                    _ => None,
-                },
-                Err(_) => None,
-            }
-        }
-    });
+    let temps = cfg.scaling.track_temperatures(n);
+    let concurrency = cfg.scaling.concurrency.max(1);
+    let max_tokens = cfg.scaling.max_tokens;
 
-    join_all(futures)
-        .await
+    let results: Vec<Option<(String, Vec<EditBlock>, f32)>> = stream::iter(temps)
+        .map(|temp| {
+            let req = ChatRequest {
+                model: model.clone(),
+                messages: vec![Message::system(system.clone()), Message::user(user.clone())],
+                temperature: temp,
+                max_tokens,
+            };
+            async move {
+                match provider.complete(req).await {
+                    Ok(raw) => match parse_blocks(&raw) {
+                        Ok(blocks) if !blocks.is_empty() => Some((raw, blocks, temp)),
+                        _ => None,
+                    },
+                    Err(_) => None,
+                }
+            }
+        })
+        .buffer_unordered(concurrency)
+        .collect()
+        .await;
+
+    results
         .into_iter()
         .flatten()
         .enumerate()

@@ -40,7 +40,7 @@ Repository overview:
 Break this into ordered steps. Reply with ONLY a JSON array, no prose:
 
 [
-  {{"title": "short imperative", "detail": "what to change and why, concretely", "check": "shell command or null"}}
+  {{"title": "short imperative", "detail": "what to change and why, concretely", "check": "shell command or null", "file": "path/to/file or null", "symbol": "function_or_type_name or null"}}
 ]
 
 Rules:
@@ -49,6 +49,8 @@ Rules:
 - Only split into multiple steps when the parts touch different files or are genuinely independent.
 - Never split one function or one edit region across multiple steps — that causes conflicting edits.
 - Aim for 1-5 steps; prefer 1 when the task is a single localized change.
+- When a step edits a single function/type, set "file" to its path and "symbol" to
+  its exact name. This lets the harness give the worker a tight, focused slice.
 
 {check_hint}"#
     )
@@ -71,6 +73,32 @@ Relevant files (current contents):
 {file_context}
 
 Produce the edit blocks that complete THIS step only."#,
+        title = step.title,
+        detail = step.detail,
+    )
+}
+
+pub fn micro_patch_system() -> String {
+    format!(
+        "You are a fast, precise implementer working on ONE small, isolated unit of code.\n\
+         You are given a focused slice: read-only dependency context plus a single target\n\
+         definition you must edit. Change ONLY the target definition. Do not touch anything\n\
+         else, do not add new files, do not change the target's signature unless explicitly\n\
+         told to.\n\n{EDIT_FORMAT}"
+    )
+}
+
+pub fn micro_patch_user(task: &str, step: &Step, slice: &str) -> String {
+    format!(
+        r#"Overall task: {task}
+
+Your assignment: {title}
+{detail}
+
+Focused code slice (edit ONLY the target definition):
+{slice}
+
+Output the search/replace edit block(s) for the target definition only."#,
         title = step.title,
         detail = step.detail,
     )

@@ -144,6 +144,7 @@ mod tests {
             title: "t".into(),
             detail: "".into(),
             check: None,
+            ..Default::default()
         };
         let best = select_best(&NoProvider, &cfg, "task", &step, &scored).await;
         assert_eq!(best, 1);
@@ -171,6 +172,7 @@ mod tests {
             title: "t".into(),
             detail: "".into(),
             check: None,
+            ..Default::default()
         };
         let best = select_best(&NoProvider, &cfg, "task", &step, &scored).await;
         assert_eq!(best, 1);
