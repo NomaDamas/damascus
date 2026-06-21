@@ -33,11 +33,24 @@ use crate::tree;
 use crate::ui::Ui;
 use crate::verify::{verify, Verdict};
 
+/// Feature toggles, mainly for ablation/benchmarking. All default false (every
+/// subsystem on).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Ablation {
+    /// Disable AST slicing + micro-patch contract (use whole-file context).
+    pub no_slice: bool,
+    /// Disable the deterministic syntax/contract pre-filter (sandbox-only).
+    pub no_filter: bool,
+    /// Disable recursive re-atomization of hard steps.
+    pub no_decompose: bool,
+}
+
 pub struct Orchestrator<'a> {
     provider: &'a dyn ChatProvider,
     cfg: &'a Config,
     root: PathBuf,
     ui: Ui,
+    ablation: Ablation,
 }
 
 #[derive(Debug, Default)]
@@ -73,11 +86,35 @@ enum Collected {
 
 impl<'a> Orchestrator<'a> {
     pub fn new(provider: &'a dyn ChatProvider, cfg: &'a Config, root: PathBuf, ui: Ui) -> Self {
+        Orchestrator::with_ablation(provider, cfg, root, ui, Ablation::default())
+    }
+
+    pub fn with_ablation(
+        provider: &'a dyn ChatProvider,
+        cfg: &'a Config,
+        root: PathBuf,
+        ui: Ui,
+        ablation: Ablation,
+    ) -> Self {
         Orchestrator {
             provider,
             cfg,
             root,
             ui,
+            ablation,
+        }
+    }
+
+    /// Pre-filter respecting the `no_filter` ablation: when disabled, only patch
+    /// applicability is checked (no syntax/contract gating).
+    fn run_prefilter(&self, blocks: &[crate::edits::EditBlock], contract: &Contract) -> Prefilter {
+        if self.ablation.no_filter {
+            match crate::edits::compute_changes(&self.root, blocks) {
+                Ok(c) => Prefilter::Pass(c),
+                Err(e) => Prefilter::RejectApply(e.to_string()),
+            }
+        } else {
+            prefilter(&self.root, blocks, contract)
         }
     }
 
@@ -195,7 +232,11 @@ impl<'a> Orchestrator<'a> {
         Box::pin(async move {
             // Index the repo fresh so slices/contracts reflect the current tree.
             let index = RepoIndex::build(&self.root);
-            let leaf = tree::plan_leaf(step, &index);
+            let leaf = if self.ablation.no_slice {
+                None
+            } else {
+                tree::plan_leaf(step, &index)
+            };
             let (ctx, contract, micro) = match &leaf {
                 Some(lp) => {
                     self.ui.dim(&format!(
@@ -256,22 +297,41 @@ impl<'a> Orchestrator<'a> {
 
             // --- 2 & 3. Verify + select ---
             let mut last_failure = match self.collect(step, candidates, &contract).await {
-                Collected::Passing { scored, tried } => {
-                    let best = select_best(self.provider, self.cfg, task, step, &scored).await;
-                    let winner = &scored[best];
-                    match apply_blocks(&self.root, &winner.candidate.blocks) {
-                        Ok(report) => changed.extend(report.files_changed.into_keys()),
-                        Err(e) => {
-                            return StepStatus::Failed {
-                                reason: format!("applying winner: {e}"),
+                Collected::Passing { mut scored, tried } => {
+                    // Confirm the winner with a fresh re-verification before
+                    // committing. A single sandbox pass can be a nondeterministic
+                    // fluke (random/time-dependent tests); requiring a second,
+                    // independent pass stops a flaky candidate from being selected
+                    // — the main cause of higher-N regressions.
+                    while !scored.is_empty() {
+                        let best = select_best(self.provider, self.cfg, task, step, &scored).await;
+                        let cand = scored.remove(best);
+                        if let Prefilter::Pass(changes) =
+                            self.run_prefilter(&cand.candidate.blocks, &contract)
+                        {
+                            if self
+                                .verify_changes(step, &changes)
+                                .await
+                                .map(|v| v.passed)
+                                .unwrap_or(false)
+                            {
+                                if let Err(e) = apply_blocks(&self.root, &cand.candidate.blocks) {
+                                    return StepStatus::Failed {
+                                        reason: format!("applying winner: {e}"),
+                                    };
+                                }
+                                changed.extend(changes.contents.keys().cloned());
+                                return StepStatus::Success {
+                                    gates: cand.verdict.summary(),
+                                    candidates: tried,
+                                    repairs: 0,
+                                };
                             }
+                            self.ui
+                                .dim("  winner failed confirmation re-verify; trying next");
                         }
                     }
-                    return StepStatus::Success {
-                        gates: winner.verdict.summary(),
-                        candidates: tried,
-                        repairs: 0,
-                    };
+                    "all candidates failed confirmation re-verify".to_string()
                 }
                 Collected::NonePassed { failure_log } => failure_log,
             };
@@ -306,7 +366,7 @@ impl<'a> Orchestrator<'a> {
                     _ => continue,
                 };
                 // Same deterministic filter applies to repairs.
-                let changes = match prefilter(&self.root, &cand.blocks, &contract) {
+                let changes = match self.run_prefilter(&cand.blocks, &contract) {
                     Prefilter::Pass(c) => c,
                     other => {
                         self.ui.candidate(0, false, &other.reason());
@@ -342,7 +402,8 @@ impl<'a> Orchestrator<'a> {
             }
 
             // --- 4b. Recursive re-atomization ---
-            if depth < self.cfg.scaling.max_recursion && *budget > 0 {
+            if !self.ablation.no_decompose && depth < self.cfg.scaling.max_recursion && *budget > 0
+            {
                 self.ui
                     .phase("atomize", "step is hard; decomposing further…");
                 let seed = if step.detail.trim().is_empty() {
@@ -411,7 +472,7 @@ impl<'a> Orchestrator<'a> {
         let mut syntax_ok = 0usize;
         for cand in candidates {
             // Stages 1 & 2: deterministic, no sandbox, no LLM.
-            let changes = match prefilter(&self.root, &cand.blocks, contract) {
+            let changes = match self.run_prefilter(&cand.blocks, contract) {
                 Prefilter::Pass(c) => {
                     syntax_ok += 1;
                     c
@@ -473,7 +534,15 @@ impl<'a> Orchestrator<'a> {
             }
             std::fs::write(&abs, content).map_err(|e| anyhow!("writing {rel} in sandbox: {e}"))?;
         }
-        Ok(verify(sandbox.path(), &self.cfg.verify, step.check.as_deref()).await)
+        // A configured global `test` gate is authoritative; only fall back to the
+        // planner's per-step check when no global test exists (weak planners can
+        // emit bogus checks, which must not override a real test command).
+        let acceptance = if self.cfg.verify.test.is_some() {
+            None
+        } else {
+            step.check.as_deref()
+        };
+        Ok(verify(sandbox.path(), &self.cfg.verify, acceptance).await)
     }
 
     async fn final_review(

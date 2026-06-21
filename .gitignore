@@ -8,3 +8,7 @@ damascus.local.toml
 
 # GJC harness state (not part of the project)
 .gjc/
+bench/bcb/results/*.log
+
+# other harness state
+.omc/

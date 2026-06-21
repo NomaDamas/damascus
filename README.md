@@ -160,6 +160,14 @@ Both modest models solve every task — and the smaller MoE is **~1.8× faster**
 Tasks range from single-function implementations to a cross-file method and a bug-fix. Reproduce
 with `bench/run.sh`; details in [`bench/README.md`](bench/README.md).
 
+### Vs. frontier agents (the harder benchmark)
+
+On **BigCodeBench‑Hard** (where Claude Code + Opus 4.8 scores 92% and Codex + gpt‑5.5 scores 100%,
+i.e. *not* a ceiling), Damascus + `gemma-4-26b-a4b` reaches **83%** — a single‑digit gap to Opus.
+Ablations show **AST slicing (+16 pts)** and **recursive decomposition (+16 pts)** are the accuracy
+drivers, not the model. Full methodology, tables, and the feasibility verdict (where parity is and
+isn't reachable) are in [`docs/EVALUATION.md`](docs/EVALUATION.md); runner in `bench/bcb/`.
+
 ## How it works
 
 | Stage | What it does | Why it helps a fast/narrow model |

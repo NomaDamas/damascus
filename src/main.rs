@@ -78,6 +78,15 @@ enum Command {
         /// Override reflexion repair rounds.
         #[arg(long)]
         repair_rounds: Option<usize>,
+        /// Ablation: disable AST slicing / micro-patch contract (whole-file context).
+        #[arg(long)]
+        no_slice: bool,
+        /// Ablation: disable the deterministic syntax/contract pre-filter.
+        #[arg(long)]
+        no_filter: bool,
+        /// Ablation: disable recursive re-atomization of hard steps.
+        #[arg(long)]
+        no_decompose: bool,
     },
 }
 
@@ -104,7 +113,26 @@ async fn run(cli: Cli, ui: Ui) -> Result<()> {
             yes,
             candidates,
             repair_rounds,
-        } => cmd_run(cli.config, join(task), yes, candidates, repair_rounds, ui).await,
+            no_slice,
+            no_filter,
+            no_decompose,
+        } => {
+            let ablation = orchestrator::Ablation {
+                no_slice,
+                no_filter,
+                no_decompose,
+            };
+            cmd_run(
+                cli.config,
+                join(task),
+                yes,
+                candidates,
+                repair_rounds,
+                ablation,
+                ui,
+            )
+            .await
+        }
     }
 }
 
@@ -265,6 +293,7 @@ async fn cmd_run(
     yes: bool,
     candidates: Option<usize>,
     repair_rounds: Option<usize>,
+    ablation: orchestrator::Ablation,
     ui: Ui,
 ) -> Result<()> {
     if task.is_empty() {
@@ -296,7 +325,7 @@ async fn cmd_run(
 
     let client = Arc::new(build_client(&cfg)?);
     let root = std::env::current_dir()?;
-    let orch = Orchestrator::new(client.as_ref(), &cfg, root, ui);
+    let orch = Orchestrator::with_ablation(client.as_ref(), &cfg, root, ui, ablation);
     let outcome = orch.run(&task).await?;
 
     eprintln!();
