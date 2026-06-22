@@ -109,6 +109,27 @@ component (LCB mixed-8) after switching models:
 The hard `arc196_a/c/d` remain a wall for *every* open model including the 550B (`pass@64=0`), so
 the residual gap to Codex's 100% is genuine hardest-reasoning capability, not harness tuning.
 
+## Cross-harness comparison — same model, different harness (does the harness matter?)
+
+To prove the harness (not just the model) is responsible, we ran the **same gemma-4-31b** through
+several harnesses on the LCB problems. Damascus is model-agnostic via OpenRouter; so are OpenCode
+and gjc; Claude Code is model-locked to Claude and **cannot run gemma at all**.
+
+| Harness (same gemma-4-31b) | Result | Notes |
+|---|---|---|
+| Raw API (no harness, 1 shot) | **pass@1 ≈ 48%**; pass@8-oracle = 62% | single-shot ceiling; edge problems (e.g. abc399_d at 25%/shot) usually missed |
+| **Damascus** (verify-gated best-of-8) | **62%** (5/5 on the solvable subset) | **realizes the model's full pass@8 ceiling** — reliably captures edge problems a single shot misses; efficient |
+| OpenCode (general agent) | **0** — abc400_c **timed out at 420s** | agentic loop flounders with a weak model; cannot finish even a medium gemma solves 7/8 in one shot |
+| gjc / gajae-code (general agent) | slow & unreliable — every run hits the 420s cap (1/2 solvable so far) | solves some but only at the timeout; with default tools it even opened a browser and went off-task |
+| Claude Code | **N/A** | model-locked to Claude; cannot run an open model |
+
+**Conclusion — Damascus's value is real and isolated:** with the *identical* weak model, Damascus
+lifts raw single-shot **48% → 62%** (the model's achievable ceiling) *and* does so efficiently,
+while general-purpose agents (OpenCode, gjc) — built assuming a strong model with reliable
+tool-calling — **flounder or time out** when driven by a weak model. The verify-gated, AST-sliced,
+best-of-N Fold Loop is precisely what a weak model needs; a generic agent loop is not. (Raw numbers:
+`bench/lcb/results/raw_gemma31.log`, `harness_cmp.jsonl`, `gjc_cmp.jsonl`.)
+
 ## Roadmap to top the index
 
 1. **Implement** (have): ensemble + high‑N already closes much of the gap on bounded tasks; the

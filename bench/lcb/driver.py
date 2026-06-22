@@ -107,6 +107,14 @@ def build_cmd(config, work, prompt):
     if config == "opus48":
         return ["claude", "-p", "--model", "claude-opus-4-8",
                 "--permission-mode", "bypassPermissions", prompt]
+    if config.startswith("opencode:"):
+        m = OPENROUTER_MODELS[config.split(":")[1]]
+        return ["opencode", "run", "--dangerously-skip-permissions",
+                "-m", f"openrouter/{m}", prompt]
+    if config.startswith("gjc:"):
+        m = OPENROUTER_MODELS[config.split(":")[1]]
+        return ["gjc", "-p", "--model", f"openrouter/{m}",
+                "--tools", "read,write,edit,bash,find,grep", prompt]
     if config == "codex55":
         return ["codex", "exec", "--skip-git-repo-check",
                 "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.5", prompt]
