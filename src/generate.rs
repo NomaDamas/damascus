@@ -6,7 +6,7 @@ use anyhow::Result;
 use futures::stream::{self, StreamExt};
 
 use crate::config::Config;
-use crate::edits::{parse_blocks, EditBlock};
+use crate::edits::{parse_blocks_fallback, EditBlock};
 use crate::provider::{ChatProvider, ChatRequest, Message, ModelRef};
 
 /// A single generated candidate for a step.
@@ -28,6 +28,7 @@ pub async fn sample_candidates(
     system: String,
     user: String,
     n: usize,
+    default_path: Option<String>,
 ) -> Vec<Candidate> {
     let temps = cfg.scaling.track_temperatures(n);
     let concurrency = cfg.scaling.concurrency.max(1);
@@ -35,6 +36,7 @@ pub async fn sample_candidates(
 
     let results: Vec<Option<(String, Vec<EditBlock>, f32)>> = stream::iter(temps)
         .map(|temp| {
+            let dp = default_path.clone();
             let req = ChatRequest {
                 model: model.clone(),
                 messages: vec![Message::system(system.clone()), Message::user(user.clone())],
@@ -43,10 +45,14 @@ pub async fn sample_candidates(
             };
             async move {
                 match provider.complete(req).await {
-                    Ok(raw) => match parse_blocks(&raw) {
-                        Ok(blocks) if !blocks.is_empty() => Some((raw, blocks, temp)),
-                        _ => None,
-                    },
+                    Ok(raw) => {
+                        let blocks = parse_blocks_fallback(&raw, dp.as_deref());
+                        if blocks.is_empty() {
+                            None
+                        } else {
+                            Some((raw, blocks, temp))
+                        }
+                    }
                     Err(_) => None,
                 }
             }
@@ -76,6 +82,7 @@ pub async fn repair_once(
     system: String,
     user: String,
     temperature: f32,
+    default_path: Option<String>,
 ) -> Result<Option<Candidate>> {
     let req = ChatRequest {
         model: model.clone(),
@@ -84,7 +91,7 @@ pub async fn repair_once(
         max_tokens: cfg.scaling.max_tokens,
     };
     let raw = provider.complete(req).await?;
-    let blocks = parse_blocks(&raw).unwrap_or_default();
+    let blocks = parse_blocks_fallback(&raw, default_path.as_deref());
     if blocks.is_empty() {
         return Ok(None);
     }

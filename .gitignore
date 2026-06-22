@@ -12,3 +12,4 @@ bench/bcb/results/*.log
 
 # other harness state
 .omc/
+bench/lcb/results/*.log

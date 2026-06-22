@@ -256,6 +256,14 @@ impl<'a> Orchestrator<'a> {
                     false,
                 ),
             };
+            // When the leaf scopes to exactly one file, a model that ignores the
+            // edit format and just emits code can still be used: its output is
+            // treated as a full-file create for that path.
+            let default_path = if contract.allowed_files.len() == 1 {
+                Some(contract.allowed_files[0].clone())
+            } else {
+                None
+            };
             let drafter = match self.cfg.models.drafter_ref() {
                 Ok(m) => m,
                 Err(e) => {
@@ -292,6 +300,7 @@ impl<'a> Orchestrator<'a> {
                     prompts::drafter_user(task, step, &ctx)
                 },
                 self.cfg.scaling.candidates,
+                default_path.clone(),
             )
             .await;
 
@@ -359,6 +368,7 @@ impl<'a> Orchestrator<'a> {
                     },
                     user,
                     temp,
+                    default_path.clone(),
                 )
                 .await
                 {

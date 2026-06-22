@@ -78,6 +78,72 @@ pub fn parse_blocks(text: &str) -> Result<Vec<EditBlock>> {
     Ok(blocks)
 }
 
+/// Like [`parse_blocks`], but if no search/replace blocks are present and a
+/// `default_path` (single target file) is known, fall back to treating the
+/// dominant fenced code block (or the whole response) as a full-file CREATE.
+/// Strong code models often ignore the edit format and just emit the code.
+pub fn parse_blocks_fallback(text: &str, default_path: Option<&str>) -> Vec<EditBlock> {
+    if let Ok(blocks) = parse_blocks(text) {
+        if !blocks.is_empty() {
+            return blocks;
+        }
+    }
+    if let Some(path) = default_path {
+        if let Some(code) = extract_dominant_code(text) {
+            return vec![EditBlock {
+                path: path.to_string(),
+                search: String::new(),
+                replace: code,
+            }];
+        }
+    }
+    Vec::new()
+}
+
+/// Extract the largest fenced code block; if none, return the whole trimmed text
+/// when it looks like code rather than prose.
+fn extract_dominant_code(text: &str) -> Option<String> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut best: Option<String> = None;
+    let mut i = 0;
+    while i < lines.len() {
+        if lines[i].trim_start().starts_with("```") {
+            let mut j = i + 1;
+            let mut body = String::new();
+            while j < lines.len() && !lines[j].trim_start().starts_with("```") {
+                body.push_str(lines[j]);
+                body.push('\n');
+                j += 1;
+            }
+            if best.as_ref().map(|b| body.len() > b.len()).unwrap_or(true) {
+                best = Some(body);
+            }
+            i = j + 1;
+        } else {
+            i += 1;
+        }
+    }
+    if let Some(b) = best {
+        let t = strip_trailing_newline(&b);
+        if !t.trim().is_empty() {
+            return Some(t);
+        }
+    }
+    // No fence: accept the whole text only if it has no obvious prose and contains code-ish lines.
+    let t = text.trim();
+    if !t.is_empty()
+        && (t.contains("def ")
+            || t.contains("import ")
+            || t.contains("class ")
+            || t.contains("fn ")
+            || t.contains("function ")
+            || t.contains("#include"))
+    {
+        return Some(t.to_string());
+    }
+    None
+}
+
 fn strip_trailing_newline(s: &str) -> String {
     s.strip_suffix('\n').unwrap_or(s).to_string()
 }
@@ -363,5 +429,29 @@ done.";
             replace: "x".into(),
         }];
         assert!(apply_blocks(dir.path(), &blocks).is_err());
+    }
+    #[test]
+    fn fallback_uses_code_fence_as_full_file() {
+        let text =
+            "Here is the solution:\n```python\nimport sys\nprint(sys.stdin.read())\n```\nDone.";
+        let blocks = parse_blocks_fallback(text, Some("solution.py"));
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].path, "solution.py");
+        assert_eq!(blocks[0].search, "");
+        assert!(blocks[0].replace.contains("import sys"));
+        assert!(!blocks[0].replace.contains("Here is"));
+    }
+
+    #[test]
+    fn fallback_prefers_real_blocks() {
+        let text = "src/a.rs\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE";
+        let blocks = parse_blocks_fallback(text, Some("solution.py"));
+        assert_eq!(blocks[0].path, "src/a.rs");
+    }
+
+    #[test]
+    fn fallback_none_without_default_path() {
+        let text = "```\nsome code\n```";
+        assert!(parse_blocks_fallback(text, None).is_empty());
     }
 }

@@ -13,7 +13,7 @@ were solved **10/10 by Claude Code + Opus 4.8** — a ceiling effect: classic, w
 algorithmic katas are effectively memorized by frontier models, so the benchmark cannot
 discriminate at the top. It was abandoned.
 
-## The benchmark used
+## Round 1: BigCodeBench‑Hard (safe subset)
 
 **BigCodeBench‑Hard** (the "hard" split of BigCodeBench) — complex, real‑library function tasks
 with rich hidden test suites. To run safely **without Docker**, the set was filtered to tasks whose
@@ -83,33 +83,67 @@ residual variance is *intrinsic test nondeterminism* rather than selection error
 sample would be needed to quantify it. The change is retained as it is strictly safer — it never
 commits an unconfirmed candidate — at the cost of one extra verification per step.
 
+## Round 2: a benchmark that spreads even the frontier (LiveCodeBench‑Hard)
+
+BigCodeBench‑Hard (safe subset) still let our cheap models look very close (83% vs 92%). To get
+real separation — including *between* the two frontier agents — we moved to **LiveCodeBench**:
+recent (Mar–Apr 2025, low‑contamination) **AtCoder** competitive‑programming problems, run as
+stdin→stdout programs with public+private test cases and per‑case timeouts (`bench/lcb/`). Sample:
+**4 medium (ABC) + 4 hard (ARC)**. We also switched the open models to the ones requested —
+**Kimi K2.7‑Code** and **GLM‑5.2** — alongside gemma for continuity.
+
+| agent | medium 4 | hard 4 | total | rate |
+|-------|:--------:|:------:|:-----:|:----:|
+| Codex + **gpt‑5.5** | 4/4 | **4/4** | 8/8 | **100%** |
+| Claude Code + **Opus 4.8** | 4/4 | 1/4 | 5/8 | **62%** |
+| damascus + gemma‑4‑26b‑a4b (n=8) | 4/4 | 0/4 | 4/8 | 50% |
+| damascus + GLM‑5.2 (n=8) | 3/4 | 0/4 | 3/8 | 38% |
+| damascus + Kimi‑K2.7‑Code (n=8) | 2/4 | 0/4 | 2/8 | 25% |
+
+This benchmark discriminates **at every level**:
+- **The frontier itself spreads: Codex 5.5 = 100% vs Opus 4.8 = 62%** (38‑pt gap). Codex/gpt‑5.5
+  solved *all four* hard ARC problems; Opus solved one. So "top‑tier harnesses" are clearly
+  separable here — the property that was missing before.
+- **The hard ARC tier is a wall for open models: 0/4 for every one of them**, at n=8. Test‑time
+  scaling did not crack a single hard competitive problem — the cheap models simply never produce a
+  correct candidate, so there is nothing for the verifier to select.
+- Open models still rank cleanly (gemma 50% > GLM 38% > Kimi 25%). Note the "stronger" Kimi/GLM
+  *under*‑performed gemma in this harness on this 8‑task set; on a sample this small that is more
+  likely routing/output‑format variance than a robust model ranking, and should be read with care.
+
+**The key lesson:** the near‑parity seen on BigCodeBench was *task‑class‑specific* (data‑processing
+boilerplate, well represented in training). On genuinely hard reasoning problems the gap is large
+and stable, and adding inference (N) does not close it.
+
 ## Verdict
 
 **Is frontier parity reachable?** Nuanced, and honest:
 
-1. **On well‑scoped, function‑level coding (this benchmark): near‑parity is already real.**
-   A 26B‑A4B open model in the harness reaches **83%** vs Opus **92%** — a single‑digit gap — and
-   the harness features (slicing, decomposition) are what get it there, not the raw model. With a
-   stronger open coder model, better selection (confirm‑winner / ensemble judging), and more
-   inference, closing the remaining ~10 points is **plausible**. Matching Codex's **100%** exactly
-   is harder: the last tasks are genuinely hard *and* capped by test nondeterminism.
+1. **On well‑scoped, "ordinary‑hard" coding (BigCodeBench): near‑parity is real.** A 26B‑A4B open
+   model in the harness reached **83%** vs Opus **92%** — single‑digit gap — and ablations show the
+   *harness* (slicing +16, decomposition +16) gets it there, not the raw model. On that task class
+   closing the last ~10 points looks plausible with a stronger open model + better selection.
 
-2. **The honest ceiling.** Test‑time scaling cannot manufacture a correct solution the model's
-   sample distribution never contains. For the hardest tasks, neither bigger N nor more repair
-   helped — the cheap model simply never produced a passing candidate. There, only a stronger
-   model (or true multi‑model ensemble) closes the gap.
+2. **On genuinely hard reasoning (LiveCodeBench hard ARC): the gap is large and stable.** Every
+   open model scored **0/4** on the hard tier at n=8; only Codex (4/4) and Opus (1/4) solved any.
+   Test‑time scaling cannot manufacture a solution the model's distribution never contains — when
+   the model never emits a correct candidate, the verifier has nothing to select. More N does not
+   help here.
 
-3. **On repo‑scale agentic tasks (e.g. SWE‑bench): not currently reachable.** Damascus targets
-   `file::symbol` leaves; it has **no code‑search / localization** subsystem, so it cannot find
-   *where* to edit in a large unfamiliar repo. Frontier agents do this well. Parity there requires
-   building retrieval/navigation — a new subsystem, not a tuning knob. This is the clearest "needs
-   more development" finding.
+3. **The frontier is not monolithic.** Codex 5.5 (100%) clearly beat Opus 4.8 (62%) on LiveCodeBench
+   — "frontier" itself is a 38‑point spread, so "reach frontier" must specify *which* frontier.
 
-**Bottom line:** Damascus + a modest open model is **near‑frontier (within ~10 pts) on bounded
-coding tasks today**, driven by context‑isolation and decomposition rather than model strength.
-Full parity is **conditionally reachable** for that task class (stronger open model + better
-selection + more inference) but **not yet** for repo‑scale work, which needs a localization layer
-the harness does not have.
+4. **On repo‑scale agentic tasks (e.g. SWE‑bench): not currently reachable.** Damascus targets
+   `file::symbol` leaves and has **no code‑search / localization** subsystem, so it cannot find
+   *where* to edit in a large unfamiliar repo. Parity there needs a new retrieval/navigation
+   subsystem, not a tuning knob.
+
+**Bottom line:** With Damascus, a modest open model is **near‑frontier on bounded, ordinary‑hard
+coding** (driven by context‑isolation + decomposition, not model strength), but falls **far short
+on genuinely hard reasoning problems** (0/4 on hard ARC vs Codex 4/4) and on **repo‑scale** tasks.
+Test‑time scaling raises the floor on solvable tasks; it cannot cross the capability wall on the
+hardest ones. Full parity with the *strongest* frontier (Codex 5.5) is **not reachable** with these
+open models today; near‑parity with the *weaker* frontier on *bounded* tasks already is.
 
 ## Reproduce
 ```bash

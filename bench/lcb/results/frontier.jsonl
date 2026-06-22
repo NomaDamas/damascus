@@ -1,0 +1,16 @@
+{"config": "opus48", "task": "abc400_c", "solved": 1, "seconds": 47.6, "tampered": 0}
+{"config": "opus48", "task": "abc400_d", "solved": 1, "seconds": 170.6, "tampered": 0}
+{"config": "opus48", "task": "abc399_d", "solved": 1, "seconds": 133.6, "tampered": 0}
+{"config": "opus48", "task": "abc399_c", "solved": 1, "seconds": 40.3, "tampered": 0}
+{"config": "opus48", "task": "arc196_b", "solved": 1, "seconds": 420.0, "tampered": 0}
+{"config": "opus48", "task": "arc196_c", "solved": 0, "seconds": 420.0, "tampered": 0}
+{"config": "opus48", "task": "arc196_a", "solved": 0, "seconds": 420.0, "tampered": 0}
+{"config": "opus48", "task": "arc196_d", "solved": 0, "seconds": 191.6, "tampered": 0}
+{"config": "codex55", "task": "abc400_c", "solved": 1, "seconds": 36.8, "tampered": 0}
+{"config": "codex55", "task": "abc400_d", "solved": 1, "seconds": 153.6, "tampered": 0}
+{"config": "codex55", "task": "abc399_d", "solved": 1, "seconds": 85.1, "tampered": 0}
+{"config": "codex55", "task": "abc399_c", "solved": 1, "seconds": 37.6, "tampered": 0}
+{"config": "codex55", "task": "arc196_b", "solved": 1, "seconds": 199.6, "tampered": 0}
+{"config": "codex55", "task": "arc196_c", "solved": 1, "seconds": 420.0, "tampered": 0}
+{"config": "codex55", "task": "arc196_a", "solved": 1, "seconds": 117.3, "tampered": 0}
+{"config": "codex55", "task": "arc196_d", "solved": 1, "seconds": 373.1, "tampered": 0}
