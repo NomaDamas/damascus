@@ -105,6 +105,7 @@ mod tests {
                 replace: "x".into(),
             }],
             temperature: 0.4,
+            model: "test/m".into(),
         }
     }
     fn verdict(diag: usize) -> Verdict {

@@ -67,6 +67,11 @@ pub struct ModelRoles {
     pub judge: String,
     /// Produces fixes during the reflexion repair loop.
     pub repairer: String,
+    /// Optional ensemble: a pool of models to spread best-of-N generation across.
+    /// When set and non-empty, overrides `drafter` for candidate generation, so a
+    /// problem one model can't solve may be solved by another in the pool.
+    #[serde(default)]
+    pub drafters: Option<Vec<String>>,
 }
 
 impl ModelRoles {
@@ -81,6 +86,13 @@ impl ModelRoles {
     }
     pub fn repairer_ref(&self) -> Result<ModelRef> {
         ModelRef::parse(&self.repairer)
+    }
+    /// The generation model pool: the `drafters` ensemble if set, else `[drafter]`.
+    pub fn drafter_pool(&self) -> Result<Vec<ModelRef>> {
+        match &self.drafters {
+            Some(list) if !list.is_empty() => list.iter().map(|m| ModelRef::parse(m)).collect(),
+            _ => Ok(vec![self.drafter_ref()?]),
+        }
     }
 }
 
@@ -233,6 +245,14 @@ impl Config {
                 ));
             }
         }
+        for m in self.models.drafter_pool()? {
+            if !self.providers.contains_key(&m.provider) {
+                return Err(anyhow!(
+                    "drafters ensemble references provider `{}` which is not defined in [providers]",
+                    m.provider
+                ));
+            }
+        }
         if self.scaling.candidates == 0 {
             return Err(anyhow!("scaling.candidates must be >= 1"));
         }
@@ -270,6 +290,9 @@ planner  = "local/qwen2.5-coder:7b"
 drafter  = "local/qwen2.5-coder:7b"
 judge    = "local/qwen2.5-coder:7b"
 repairer = "local/qwen2.5-coder:7b"
+# Optional ensemble: spread best-of-N generation across several models. A problem
+# one model can't solve may be solved by another — orchestration as a quality lever.
+# drafters = ["openrouter/openai/gpt-oss-120b", "openrouter/moonshotai/kimi-k2.7-code", "openrouter/z-ai/glm-5.2"]
 
 [scaling]
 candidates = 8        # high-throughput best-of-N: sample many, let the filter pick

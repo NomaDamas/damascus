@@ -16,6 +16,8 @@ pub struct Candidate {
     pub raw: String,
     pub blocks: Vec<EditBlock>,
     pub temperature: f32,
+    /// Which model in the ensemble produced this candidate.
+    pub model: String,
 }
 
 /// Generate `n` candidates concurrently for the given drafter messages. Each
@@ -23,7 +25,7 @@ pub struct Candidate {
 /// contains no parseable edit blocks are dropped (they cannot be verified).
 pub async fn sample_candidates(
     provider: &dyn ChatProvider,
-    model: &ModelRef,
+    models: &[ModelRef],
     cfg: &Config,
     system: String,
     user: String,
@@ -34,11 +36,20 @@ pub async fn sample_candidates(
     let concurrency = cfg.scaling.concurrency.max(1);
     let max_tokens = cfg.scaling.max_tokens;
 
-    let results: Vec<Option<(String, Vec<EditBlock>, f32)>> = stream::iter(temps)
-        .map(|temp| {
+    let pool: Vec<ModelRef> = if models.is_empty() {
+        return Vec::new();
+    } else {
+        models.to_vec()
+    };
+    type SampleOut = Option<(String, Vec<EditBlock>, f32, String)>;
+    let results: Vec<SampleOut> = stream::iter(temps.into_iter().enumerate())
+        .map(|(i, temp)| {
             let dp = default_path.clone();
+            // Spread samples across the ensemble round-robin.
+            let model = pool[i % pool.len()].clone();
+            let model_name = model.to_string();
             let req = ChatRequest {
-                model: model.clone(),
+                model,
                 messages: vec![Message::system(system.clone()), Message::user(user.clone())],
                 temperature: temp,
                 max_tokens,
@@ -50,7 +61,7 @@ pub async fn sample_candidates(
                         if blocks.is_empty() {
                             None
                         } else {
-                            Some((raw, blocks, temp))
+                            Some((raw, blocks, temp, model_name))
                         }
                     }
                     Err(_) => None,
@@ -65,11 +76,12 @@ pub async fn sample_candidates(
         .into_iter()
         .flatten()
         .enumerate()
-        .map(|(index, (raw, blocks, temperature))| Candidate {
+        .map(|(index, (raw, blocks, temperature, model))| Candidate {
             index,
             raw,
             blocks,
             temperature,
+            model,
         })
         .collect()
 }
@@ -100,5 +112,6 @@ pub async fn repair_once(
         raw,
         blocks,
         temperature,
+        model: model.to_string(),
     }))
 }

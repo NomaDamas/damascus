@@ -69,16 +69,27 @@ def scores(work):
     return p.returncode == 0
 
 
+ENSEMBLE = ["openai/gpt-oss-120b", "moonshotai/kimi-k2.7-code",
+            "z-ai/glm-5.2", "google/gemma-4-26b-a4b-it"]
+
+
 def write_toml(work, model, n, repair):
+    if model == "ensemble":
+        plan = ENSEMBLE[0]
+        drafters = "[" + ", ".join(f'"openrouter/{m}"' for m in ENSEMBLE) + "]"
+    else:
+        plan = model
+        drafters = f'["openrouter/{model}"]'
     (work / "damascus.toml").write_text(f"""
 [providers.openrouter]
 base_url = "https://openrouter.ai/api/v1"
 api_key_env = "OPENROUTER_API_KEY"
 [models]
-planner  = "openrouter/{model}"
-drafter  = "openrouter/{model}"
-judge    = "openrouter/{model}"
-repairer = "openrouter/{model}"
+planner  = "openrouter/{plan}"
+drafter  = "openrouter/{plan}"
+judge    = "openrouter/{plan}"
+repairer = "openrouter/{plan}"
+drafters = {drafters}
 [scaling]
 candidates = {n}
 repair_rounds = {repair}
@@ -100,7 +111,7 @@ def build_cmd(config, work, prompt):
                 "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.5", prompt]
     if config.startswith("damascus:"):
         parts = config.split(":")
-        model = OPENROUTER_MODELS[parts[1]]
+        model = "ensemble" if parts[1] == "ensemble" else OPENROUTER_MODELS[parts[1]]
         n, repair, flags = 8, 1, []
         for tok in parts[2:]:
             if tok in ("no_slice", "no_filter", "no_decompose"):

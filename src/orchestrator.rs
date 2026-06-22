@@ -264,21 +264,24 @@ impl<'a> Orchestrator<'a> {
             } else {
                 None
             };
-            let drafter = match self.cfg.models.drafter_ref() {
-                Ok(m) => m,
-                Err(e) => {
+            let pool = match self.cfg.models.drafter_pool() {
+                Ok(p) if !p.is_empty() => p,
+                _ => {
                     return StepStatus::Failed {
-                        reason: e.to_string(),
+                        reason: "no drafter model configured".into(),
                     }
                 }
             };
             // The repairer role may point at a different model for diversity;
-            // fall back to the drafter if it cannot be resolved.
+            // fall back to the first pool model if it cannot be resolved.
             let repairer = self
                 .cfg
                 .models
                 .repairer_ref()
-                .unwrap_or_else(|_| drafter.clone());
+                .unwrap_or_else(|_| pool[0].clone());
+            if pool.len() > 1 {
+                self.ui.dim(&format!("  ensemble: {} models", pool.len()));
+            }
 
             // --- 1. Best-of-N generation ---
             self.ui.phase(
@@ -287,7 +290,7 @@ impl<'a> Orchestrator<'a> {
             );
             let candidates = sample_candidates(
                 self.provider,
-                &drafter,
+                &pool,
                 self.cfg,
                 if micro {
                     prompts::micro_patch_system()
@@ -496,7 +499,13 @@ impl<'a> Orchestrator<'a> {
             // Stage 3: sandboxed build/test, only for survivors.
             match self.verify_changes(step, &changes).await {
                 Ok(verdict) => {
-                    let summary = format!("{} @t{:.2}", verdict.summary(), cand.temperature);
+                    let model_short = cand.model.rsplit('/').next().unwrap_or(&cand.model);
+                    let summary = format!(
+                        "{} @t{:.2} [{}]",
+                        verdict.summary(),
+                        cand.temperature,
+                        model_short
+                    );
                     self.ui.candidate(cand.index, verdict.passed, &summary);
                     if verdict.passed {
                         scored.push(Scored {
