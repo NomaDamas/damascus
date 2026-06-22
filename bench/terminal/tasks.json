@@ -1,0 +1,33 @@
+[
+  {
+    "id": "nonblank_lines",
+    "instructions": "A file named input.txt exists in the working directory. Write a program solve.py that prints, to stdout, the number of NON-BLANK lines in input.txt (lines that contain at least one non-whitespace character). Print just the integer.",
+    "files": {"input.txt": "alpha\n\n  \nbeta\ngamma\n\n  delta \n"},
+    "expected": "4"
+  },
+  {
+    "id": "csv_col_sum",
+    "instructions": "A CSV file data.csv with a header row exists in the working directory. Write solve.py that prints, to stdout, the integer sum of the 'amount' column (values are integers). Print just the integer.",
+    "files": {"data.csv": "id,amount,note\n1,10,a\n2,25,b\n3,5,c\n4,60,d\n"},
+    "expected": "100"
+  },
+  {
+    "id": "unique_sorted",
+    "instructions": "A file items.txt exists with one item per line (possibly with duplicates and surrounding whitespace). Write solve.py that prints the unique items, trimmed, sorted ascending, one per line.",
+    "files": {"items.txt": "banana\napple\n banana \ncherry\napple\n"},
+    "expected": "apple\nbanana\ncherry"
+  },
+  {
+    "id": "top_word",
+    "instructions": "A file text.txt exists. Write solve.py that prints the single most frequent word in text.txt. Words are maximal runs of ASCII letters, compared case-insensitively and printed in lowercase. If tied, print the one that is smallest alphabetically.",
+    "files": {"text.txt": "The fox and the dog. The FOX ran; the fox WON.\n"},
+    "expected": "the"
+  },
+  {
+    "id": "kv_lookup",
+    "instructions": "A file config.ini exists with lines of the form key=value. Write solve.py that reads a key name from standard input (a single line) and prints the corresponding value. If the key is absent, print MISSING.",
+    "files": {"config.ini": "host=localhost\nport=8080\nmode=fast\n"},
+    "stdin": "port\n",
+    "expected": "8080"
+  }
+]

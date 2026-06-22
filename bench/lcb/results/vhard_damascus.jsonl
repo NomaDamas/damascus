@@ -1,0 +1,12 @@
+{"config": "damascus:ensemble:n16", "task": "arc196_d", "solved": 0, "seconds": 258.9, "tampered": 0}
+{"config": "damascus:ensemble:n16", "task": "arc195_e", "solved": 0, "seconds": 264.0, "tampered": 0}
+{"config": "damascus:ensemble:n16", "task": "arc194_e", "solved": 1, "seconds": 200.9, "tampered": 0}
+{"config": "damascus:ensemble:n16", "task": "arc196_c", "solved": 0, "seconds": 120.0, "tampered": 0}
+{"config": "damascus:ensemble:n16", "task": "abc400_g", "solved": 0, "seconds": 313.2, "tampered": 0}
+{"config": "damascus:ensemble:n16", "task": "abc398_g", "solved": 1, "seconds": 286.0, "tampered": 0}
+{"config": "damascus:ossbig:n16", "task": "arc196_d", "solved": 0, "seconds": 120.0, "tampered": 0}
+{"config": "damascus:ossbig:n16", "task": "arc195_e", "solved": 0, "seconds": 349.6, "tampered": 0}
+{"config": "damascus:ossbig:n16", "task": "arc194_e", "solved": 0, "seconds": 87.5, "tampered": 0}
+{"config": "damascus:ossbig:n16", "task": "arc196_c", "solved": 0, "seconds": 69.2, "tampered": 0}
+{"config": "damascus:ossbig:n16", "task": "abc400_g", "solved": 0, "seconds": 87.8, "tampered": 0}
+{"config": "damascus:ossbig:n16", "task": "abc398_g", "solved": 1, "seconds": 215.5, "tampered": 0}
