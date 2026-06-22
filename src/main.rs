@@ -3,7 +3,7 @@
 //! The binary wires the CLI to the Fold Loop. Library internals live in the
 //! sibling modules and are unit-tested independently.
 
-use damascus::{config, context, orchestrator, plan, provider, ui};
+use damascus::{config, context, orchestrator, plan, provider, qa, slice, ui};
 
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
@@ -88,6 +88,14 @@ enum Command {
         #[arg(long)]
         no_decompose: bool,
     },
+    /// Answer a question about the current repository (read-only).
+    Ask {
+        /// The question.
+        question: Vec<String>,
+        /// Best-of-N answers (self-consistency); judge selects the best.
+        #[arg(long, default_value_t = 3)]
+        n: usize,
+    },
 }
 
 #[tokio::main]
@@ -133,6 +141,7 @@ async fn run(cli: Cli, ui: Ui) -> Result<()> {
             )
             .await
         }
+        Command::Ask { question, n } => cmd_ask(cli.config, join(question), n, ui).await,
     }
 }
 
@@ -283,6 +292,25 @@ async fn cmd_plan(path: Option<PathBuf>, task: String, ui: Ui) -> Result<()> {
         if let Some(c) = &s.check {
             println!("   check: {c}");
         }
+    }
+    Ok(())
+}
+
+async fn cmd_ask(path: Option<PathBuf>, question: String, n: usize, ui: Ui) -> Result<()> {
+    if question.is_empty() {
+        return Err(anyhow!(
+            "provide a question, e.g. `damascus ask \"where is X handled?\"`"
+        ));
+    }
+    let (cfg, _) = load_config(path)?;
+    let client = build_client(&cfg)?;
+    ui.phase("ask", "indexing repository…");
+    let index = slice::RepoIndex::build(&std::env::current_dir()?);
+    ui.phase("ask", &format!("retrieving + answering (best-of-{n})…"));
+    let res = qa::answer(&client, &cfg, &index, &question, n).await?;
+    println!("{}", res.answer);
+    if !res.sources.is_empty() {
+        ui.dim(&format!("\nsources: {}", res.sources.join(", ")));
     }
     Ok(())
 }

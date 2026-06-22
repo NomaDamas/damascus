@@ -241,6 +241,7 @@ Override scaling per-run: `damascus run --candidates 5 --repair-rounds 3 "…"`.
 | `damascus config` | Print the resolved configuration and its source path |
 | `damascus plan "<task>"` | Decompose a task into steps (read-only, no changes) |
 | `damascus run "<task>" [-y]` | Run the full Fold Loop on the current repo |
+| `damascus ask "<question>"` | Answer a question about the repo (retrieval + best-of-N + judge) |
 
 ## Design
 

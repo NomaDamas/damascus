@@ -16,6 +16,7 @@ pub mod orchestrator;
 pub mod plan;
 pub mod prompts;
 pub mod provider;
+pub mod qa;
 pub mod sandbox;
 pub mod select;
 pub mod slice;

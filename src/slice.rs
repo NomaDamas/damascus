@@ -120,6 +120,11 @@ impl RepoIndex {
             .unwrap_or_default()
     }
 
+    /// All indexed file paths (sorted).
+    pub fn file_paths(&self) -> Vec<&str> {
+        self.files.keys().map(|s| s.as_str()).collect()
+    }
+
     fn symbol_text<'a>(&'a self, file: &'a IndexedFile, s: &Symbol) -> &'a str {
         file.source.get(s.start_byte..s.end_byte).unwrap_or("")
     }
