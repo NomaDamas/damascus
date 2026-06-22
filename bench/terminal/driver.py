@@ -13,10 +13,9 @@ from pathlib import Path
 HERE = Path(__file__).parent
 VENV_PY = "/tmp/bench-venv/bin/python"
 TASKS = json.load(open(HERE / "tasks.json"))
-OPENROUTER_MODELS = {"gemma": "google/gemma-4-26b-a4b-it", "ossbig": "openai/gpt-oss-120b",
-                     "kimi": "moonshotai/kimi-k2.7-code", "glm": "z-ai/glm-5.2"}
-ENSEMBLE = ["openai/gpt-oss-120b", "moonshotai/kimi-k2.7-code", "z-ai/glm-5.2",
-            "google/gemma-4-26b-a4b-it"]
+OPENROUTER_MODELS = {"gemma": "google/gemma-4-26b-a4b-it", "gemma31": "google/gemma-4-31b-it",
+                     "ossbig": "openai/gpt-oss-120b", "nemotron": "nvidia/nemotron-3-ultra-550b-a55b"}
+ENSEMBLE = ["nvidia/nemotron-3-ultra-550b-a55b", "openai/gpt-oss-120b", "google/gemma-4-31b-it"]
 
 RUN_TESTS = r'''import json, subprocess, sys
 spec = json.load(open(".task.json"))

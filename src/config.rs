@@ -292,7 +292,7 @@ judge    = "local/qwen2.5-coder:7b"
 repairer = "local/qwen2.5-coder:7b"
 # Optional ensemble: spread best-of-N generation across several models. A problem
 # one model can't solve may be solved by another — orchestration as a quality lever.
-# drafters = ["openrouter/openai/gpt-oss-120b", "openrouter/moonshotai/kimi-k2.7-code", "openrouter/z-ai/glm-5.2"]
+# drafters = ["openrouter/nvidia/nemotron-3-ultra-550b-a55b", "openrouter/openai/gpt-oss-120b", "openrouter/google/gemma-4-31b-it"]
 
 [scaling]
 candidates = 8        # high-throughput best-of-N: sample many, let the filter pick

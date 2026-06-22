@@ -13,11 +13,13 @@ from pathlib import Path
 VENV_PY = "/tmp/bench-venv/bin/python"
 SAMPLE = json.load(open("/tmp/lcb_sample.json"))
 
+# Allowed open models only (no Chinese models per project policy).
 OPENROUTER_MODELS = {
     "gemma": "google/gemma-4-26b-a4b-it",
+    "gemma31": "google/gemma-4-31b-it",
     "ossbig": "openai/gpt-oss-120b",
-    "kimi": "moonshotai/kimi-k2.7-code",
-    "glm": "z-ai/glm-5.2",
+    "nemotron": "nvidia/nemotron-3-ultra-550b-a55b",
+    "nemosuper": "nvidia/nemotron-3-super-120b-a12b",
 }
 
 RUN_TESTS = r'''import json, subprocess, sys
@@ -69,8 +71,7 @@ def scores(work):
     return p.returncode == 0
 
 
-ENSEMBLE = ["openai/gpt-oss-120b", "moonshotai/kimi-k2.7-code",
-            "z-ai/glm-5.2", "google/gemma-4-26b-a4b-it"]
+ENSEMBLE = ["openai/gpt-oss-120b", "google/gemma-4-31b-it"]
 
 
 def write_toml(work, model, n, repair):

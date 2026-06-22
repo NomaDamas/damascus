@@ -81,6 +81,34 @@ whole feedback loop (first-class LSP diagnostics, tool orchestration, context ma
 model ever samples a correct solution, so neither N nor the ensemble can select one. Closing it
 needs a *stronger pool member* or *decomposition that changes the sub-problem distribution*, not more N.
 
+## Model switch results (allowed open models only)
+
+Policy: Chinese models (Kimi/GLM/Qwen) are excluded; they also underperformed gemma. The allowed
+open pool is **gpt-oss-120b, gemma-4-26b/31b, Nemotron-3-Ultra-550B**. Re-running the Implement
+component (LCB mixed-8) after switching models:
+
+| Variant | pass@1 | note |
+|---|---|---|
+| Codex · gpt-5.5 | 100% (8/8) | frontier |
+| **Damascus · gemma-4-31b (n8)** | **62% (5/8)** | **= Opus 4.8**; up from gemma-26b 50% (solves hard `arc196_b`) |
+| Claude Code · Opus 4.8 | 62% (5/8) | frontier |
+| Damascus · gemma-4-26b (n8) | 50% (4/8) | prior best small |
+| Damascus · Nemotron-3-Ultra-550B (n8) | 38% (3/8) | bigger ≠ better (slow, TLE-prone) |
+| Damascus · ensemble incl. Nemotron (n16) | 38% (3/8) | a weak/slow member *drags* the pool |
+
+**Findings:**
+1. **The right model upgrade reaches frontier-medium parity:** `gemma-4-31b` in the harness hits
+   **62% = Opus 4.8** on this set — the authorized model switch closed the gap to Opus.
+2. **Bigger is not better, and ensembles must be curated:** the 550B Nemotron *underperformed* the
+   31B gemma (slower, TLE-prone solutions), and adding it to the ensemble pulled the pool *below*
+   the best single model (it round-robins budget onto a weak member). Ensemble only helps with
+   complementary, comparably-strong members. The curated gpt-oss-120b + gemma-4-31b ensemble (n16)
+   scored **5/8 (62%)** — it *ties* gemma-4-31b/Opus rather than beating them, because both members
+   solve the same problems and neither cracks the hard-ARC walls (`bench/lcb/results/curated.jsonl`).
+
+The hard `arc196_a/c/d` remain a wall for *every* open model including the 550B (`pass@64=0`), so
+the residual gap to Codex's 100% is genuine hardest-reasoning capability, not harness tuning.
+
 ## Roadmap to top the index
 
 1. **Implement** (have): ensemble + high‑N already closes much of the gap on bounded tasks; the
