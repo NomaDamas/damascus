@@ -119,8 +119,8 @@ and gjc; Claude Code is model-locked to Claude and **cannot run gemma at all**.
 |---|---|---|
 | Raw API (no harness, 1 shot) | **pass@1 ≈ 48%**; pass@8-oracle = 62% | single-shot ceiling; edge problems (e.g. abc399_d at 25%/shot) usually missed |
 | **Damascus** (verify-gated best-of-8) | **62%** (5/5 on the solvable subset) | **realizes the model's full pass@8 ceiling** — reliably captures edge problems a single shot misses; efficient |
-| OpenCode (general agent) | **0** — abc400_c **timed out at 420s** | agentic loop flounders with a weak model; cannot finish even a medium gemma solves 7/8 in one shot |
-| gjc / gajae-code (general agent) | slow & unreliable — every run hits the 420s cap (1/2 solvable so far) | solves some but only at the timeout; with default tools it even opened a browser and went off-task |
+| OpenCode (general agent) | **~0** — stalls, no edits applied | **Root cause (logged):** gemma-31b emits the solution as a *markdown code block, not a `write` tool call*, so OpenCode never applies it — the model produced correct code but the harness couldn't capture it. (Damascus's fallback parser handles exactly this.) |
+| gjc / gajae-code (general agent) | solves some but **every run hits the 420s cap** — impractically slow | with default tools it even opened a browser and went off-task; restricted to coding tools it is correct sometimes but ~minutes/problem |
 | Claude Code | **N/A** | model-locked to Claude; cannot run an open model |
 
 **Conclusion — Damascus's value is real and isolated:** with the *identical* weak model, Damascus

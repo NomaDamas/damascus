@@ -16,6 +16,7 @@ use std::pin::Pin;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
+use futures::StreamExt;
 
 use crate::config::Config;
 use crate::context;
@@ -498,42 +499,63 @@ impl<'a> Orchestrator<'a> {
                 best_attempt: None,
             };
         }
-        let mut scored = Vec::new();
+        // Stages 1 & 2: deterministic, no sandbox, no LLM. Done synchronously up
+        // front so we know which candidates are even worth sandbox-verifying.
         let mut failure_log = String::from("all candidates failed verification");
         let mut best_attempt: Option<String> = None;
-        let mut syntax_ok = 0usize;
+        let mut passers: Vec<(Candidate, crate::edits::Changes)> = Vec::new();
         for cand in candidates {
-            // Stages 1 & 2: deterministic, no sandbox, no LLM.
-            let changes = match self.run_prefilter(&cand.blocks, contract) {
-                Prefilter::Pass(c) => {
-                    syntax_ok += 1;
-                    c
-                }
+            match self.run_prefilter(&cand.blocks, contract) {
+                Prefilter::Pass(c) => passers.push((cand, c)),
                 other => {
                     self.ui.candidate(cand.index, false, &other.reason());
                     failure_log = other.reason();
                     best_attempt = Some(cand.raw.clone());
-                    continue;
                 }
+            }
+        }
+        let syntax_ok = passers.len();
+        if passers.is_empty() {
+            self.ui
+                .dim(&format!("  funnel: {total} generated → 0 passed filter"));
+            return Collected::NonePassed {
+                failure_log,
+                best_attempt,
             };
-            // Stage 3: sandboxed build/test, only for survivors.
-            match self.verify_changes(step, &changes).await {
+        }
+
+        // Stage 3: verify survivors CONCURRENTLY (bounded) with early-exit. This
+        // is the key fix for one hanging/slow candidate serializing the rest: a
+        // fast correct candidate returns immediately and the rest are cancelled
+        // (kill_on_drop terminates their gate processes). General, not task-specific.
+        let conc = self.cfg.scaling.concurrency.max(1).min(syntax_ok);
+        let mut scored: Vec<Scored> = Vec::new();
+        let mut stream =
+            futures::stream::iter(passers.into_iter().map(|(cand, changes)| async move {
+                let res = self.verify_changes(step, &changes).await;
+                (cand, changes, res)
+            }))
+            .buffer_unordered(conc);
+
+        while let Some((cand, changes, res)) = stream.next().await {
+            match res {
                 Ok(verdict) => {
                     let model_short = cand.model.rsplit('/').next().unwrap_or(&cand.model);
-                    let summary = format!(
-                        "{} @t{:.2} [{}]",
-                        verdict.summary(),
-                        cand.temperature,
-                        model_short
+                    self.ui.candidate(
+                        cand.index,
+                        verdict.passed,
+                        &format!(
+                            "{} @t{:.2} [{}]",
+                            verdict.summary(),
+                            cand.temperature,
+                            model_short
+                        ),
                     );
-                    self.ui.candidate(cand.index, verdict.passed, &summary);
                     if verdict.passed {
                         let touched = changes.report.touched_lines;
-                        // Early exit: for an objective gate the first passing
-                        // candidate is already correct — stop spending on the rest.
                         if self.cfg.scaling.early_exit {
                             self.ui.dim(&format!(
-                                "  funnel: {total} generated → early-exit on first verified pass"
+                                "  funnel: {total} generated → {syntax_ok} filtered → early-exit on first pass"
                             ));
                             return Collected::Passing {
                                 scored: vec![Scored {
@@ -568,7 +590,7 @@ impl<'a> Orchestrator<'a> {
             }
         }
         self.ui.dim(&format!(
-            "  funnel: {total} generated → {syntax_ok} passed filter → {} verified",
+            "  funnel: {total} generated → {syntax_ok} filtered → {} verified",
             scored.len()
         ));
         let tried = scored.len();

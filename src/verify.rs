@@ -95,6 +95,7 @@ async fn run_gate(name: &str, command: &str, dir: &Path, dur: Duration) -> GateR
         .arg(command)
         .current_dir(dir)
         .stdin(Stdio::null())
+        .kill_on_drop(true)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
