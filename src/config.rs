@@ -118,6 +118,12 @@ pub struct ScalingConfig {
     pub concurrency: usize,
     /// Exploration-track temperature for the high-temp half of the rollout.
     pub explore_temperature: f32,
+    /// Stop verifying candidates as soon as one passes the gate. For objective
+    /// (deterministic) gates the first passing candidate is already correct, so
+    /// this cuts time/cost massively while keeping quality — exploiting the
+    /// cheap/fast model's speed. Disable to always best-of-N + judge-select.
+    #[serde(default = "default_true")]
+    pub early_exit: bool,
 }
 
 impl Default for ScalingConfig {
@@ -132,6 +138,7 @@ impl Default for ScalingConfig {
             max_tokens: None,
             concurrency: default_concurrency(),
             explore_temperature: default_explore_temp(),
+            early_exit: true,
         }
     }
 }
@@ -185,6 +192,10 @@ fn default_timeout() -> u64 {
 
 fn default_concurrency() -> usize {
     8
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_explore_temp() -> f32 {

@@ -80,8 +80,15 @@ enum StepStatus {
 
 /// Result of verifying a batch of candidates.
 enum Collected {
-    Passing { scored: Vec<Scored>, tried: usize },
-    NonePassed { failure_log: String },
+    Passing {
+        scored: Vec<Scored>,
+        tried: usize,
+    },
+    NonePassed {
+        failure_log: String,
+        /// The closest failing candidate's raw output, for sequential refinement.
+        best_attempt: Option<String>,
+    },
 }
 
 impl<'a> Orchestrator<'a> {
@@ -308,7 +315,10 @@ impl<'a> Orchestrator<'a> {
             .await;
 
             // --- 2 & 3. Verify + select ---
-            let mut last_failure = match self.collect(step, candidates, &contract).await {
+            let (mut last_failure, best_attempt) = match self
+                .collect(step, candidates, &contract)
+                .await
+            {
                 Collected::Passing { mut scored, tried } => {
                     // Confirm the winner with a fresh re-verification before
                     // committing. A single sandbox pass can be a nondeterministic
@@ -343,9 +353,15 @@ impl<'a> Orchestrator<'a> {
                                 .dim("  winner failed confirmation re-verify; trying next");
                         }
                     }
-                    "all candidates failed confirmation re-verify".to_string()
+                    (
+                        "all candidates failed confirmation re-verify".to_string(),
+                        None,
+                    )
                 }
-                Collected::NonePassed { failure_log } => failure_log,
+                Collected::NonePassed {
+                    failure_log,
+                    best_attempt,
+                } => (failure_log, best_attempt),
             };
 
             // --- 4a. Reflexion repair ---
@@ -358,7 +374,8 @@ impl<'a> Orchestrator<'a> {
                         self.cfg.scaling.repair_rounds
                     ),
                 );
-                let user = prompts::repair_user(task, step, &last_failure, &ctx);
+                let user =
+                    prompts::repair_user(task, step, &last_failure, best_attempt.as_deref(), &ctx);
                 let temp = self.cfg.scaling.temperature_for(round);
                 let cand = match repair_once(
                     self.provider,
@@ -478,10 +495,12 @@ impl<'a> Orchestrator<'a> {
         if total == 0 {
             return Collected::NonePassed {
                 failure_log: "model produced no parseable edit blocks".into(),
+                best_attempt: None,
             };
         }
         let mut scored = Vec::new();
         let mut failure_log = String::from("all candidates failed verification");
+        let mut best_attempt: Option<String> = None;
         let mut syntax_ok = 0usize;
         for cand in candidates {
             // Stages 1 & 2: deterministic, no sandbox, no LLM.
@@ -493,6 +512,7 @@ impl<'a> Orchestrator<'a> {
                 other => {
                     self.ui.candidate(cand.index, false, &other.reason());
                     failure_log = other.reason();
+                    best_attempt = Some(cand.raw.clone());
                     continue;
                 }
             };
@@ -508,13 +528,32 @@ impl<'a> Orchestrator<'a> {
                     );
                     self.ui.candidate(cand.index, verdict.passed, &summary);
                     if verdict.passed {
+                        let touched = changes.report.touched_lines;
+                        // Early exit: for an objective gate the first passing
+                        // candidate is already correct — stop spending on the rest.
+                        if self.cfg.scaling.early_exit {
+                            self.ui.dim(&format!(
+                                "  funnel: {total} generated → early-exit on first verified pass"
+                            ));
+                            return Collected::Passing {
+                                scored: vec![Scored {
+                                    candidate: cand,
+                                    verdict,
+                                    touched_lines: touched,
+                                }],
+                                tried: 1,
+                            };
+                        }
                         scored.push(Scored {
                             candidate: cand,
                             verdict,
-                            touched_lines: changes.report.touched_lines,
+                            touched_lines: touched,
                         });
-                    } else if let Some(log) = verdict.first_failure_log() {
-                        failure_log = log.to_string();
+                    } else {
+                        if let Some(log) = verdict.first_failure_log() {
+                            failure_log = log.to_string();
+                        }
+                        best_attempt = Some(cand.raw.clone());
                     }
                 }
                 Err(e) => {
@@ -524,6 +563,7 @@ impl<'a> Orchestrator<'a> {
                         &format!("verify error: {}", truncate(&e.to_string(), 80)),
                     );
                     failure_log = e.to_string();
+                    best_attempt = Some(cand.raw.clone());
                 }
             }
         }
@@ -533,7 +573,10 @@ impl<'a> Orchestrator<'a> {
         ));
         let tried = scored.len();
         if scored.is_empty() {
-            Collected::NonePassed { failure_log }
+            Collected::NonePassed {
+                failure_log,
+                best_attempt,
+            }
         } else {
             Collected::Passing { scored, tried }
         }

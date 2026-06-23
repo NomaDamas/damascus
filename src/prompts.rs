@@ -104,7 +104,22 @@ Output the search/replace edit block(s) for the target definition only."#,
     )
 }
 
-pub fn repair_user(task: &str, step: &Step, failure_log: &str, file_context: &str) -> String {
+pub fn repair_user(
+    task: &str,
+    step: &Step,
+    failure_log: &str,
+    prior_attempt: Option<&str>,
+    file_context: &str,
+) -> String {
+    // Sequential refinement: show the model its own closest failing attempt so it
+    // fixes that rather than starting from scratch each round.
+    let prior = match prior_attempt {
+        Some(a) if !a.trim().is_empty() => format!(
+            "\nYour previous attempt (fix THIS rather than rewriting from scratch):\n-----\n{}\n-----\n",
+            a.trim()
+        ),
+        _ => String::new(),
+    };
     format!(
         r#"Overall task: {task}
 
@@ -115,11 +130,11 @@ Your previous attempt did NOT pass verification. Failure output:
 -----
 {failure_log}
 -----
-
+{prior}
 Relevant files (current contents):
 {file_context}
 
-Fix the problem. Output corrected edit blocks only."#,
+Diagnose the specific cause from the failure output, then output corrected edit blocks only."#,
         title = step.title,
         detail = step.detail,
     )
