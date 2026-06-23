@@ -56,8 +56,11 @@ def file_list(repo_dir, limit=400):
     for root, dirs, files in os.walk(repo_dir):
         dirs[:] = [d for d in dirs if d not in (".git", ".swevenv", "tests", "test", "node_modules", "docs")]
         for f in files:
-            if f.endswith(".py"):
-                rel = os.path.relpath(os.path.join(root, f), repo_dir)
+            rel = os.path.relpath(os.path.join(root, f), repo_dir)
+            # source files only — never localize/edit tests (SWE-bench overwrites them)
+            base = os.path.basename(f)
+            if f.endswith(".py") and not (base.startswith("test_") or base.endswith("_test.py")
+                                          or base == "conftest.py"):
                 out.append(rel)
             if len(out) >= limit:
                 return out
@@ -134,15 +137,24 @@ def direct_fix(model, issue, target_files, repo_dir):
         if not os.path.exists(fp):
             continue
         cur = open(fp).read()
-        if len(cur) > 16000:
-            continue
-        p = (f"Issue:\n{issue[:4000]}\n\nFile {tf} (current contents):\n```\n{cur}\n```\n\n"
-             "Output the COMPLETE corrected contents of this file that fixes the issue, "
-             "in a single ```python block. Keep all unrelated code unchanged.")
-        resp = chat(model, p, max_tokens=8000)
-        m = re.findall(r"```(?:python)?\n(.*?)```", resp, re.S)
-        if m and len(m[0].strip()) > 50:
-            open(fp, "w").write(m[0])
+        if len(cur) <= 14000:
+            # small file: full corrected rewrite
+            p = (f"Issue:\n{issue[:4000]}\n\nFile {tf} (current contents):\n```\n{cur}\n```\n\n"
+                 "Output the COMPLETE corrected contents of this file that fixes the issue, "
+                 "in a single ```python block. Keep all unrelated code unchanged.")
+            resp = chat(model, p, max_tokens=8000)
+            m = re.findall(r"```(?:python)?\n(.*?)```", resp, re.S)
+            if m and len(m[0].strip()) > 50:
+                open(fp, "w").write(m[0])
+        else:
+            # large file: ask for a targeted search/replace edit
+            p = (f"Issue:\n{issue[:4000]}\n\nFile {tf} is large. Output a single minimal edit as:\n"
+                 "<<<<<<< SEARCH\n<exact existing lines>\n=======\n<replacement lines>\n>>>>>>> REPLACE\n"
+                 f"Current file:\n```\n{cur[:13000]}\n```")
+            resp = chat(model, p, max_tokens=3000)
+            mm = re.search(r"<<<<<<< SEARCH\n(.*?)\n=======\n(.*?)\n>>>>>>> REPLACE", resp, re.S)
+            if mm and mm.group(1) in cur:
+                open(fp, "w").write(cur.replace(mm.group(1), mm.group(2), 1))
 
 
 def main():
