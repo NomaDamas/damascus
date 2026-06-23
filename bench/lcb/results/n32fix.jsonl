@@ -1,0 +1,7 @@
+{"config": "damascus:gemma31:n32", "task": "abc400_c", "solved": 1, "seconds": 72.7, "tampered": 0}
+{"config": "damascus:gemma31:n32", "task": "abc400_d", "solved": 1, "seconds": 126.0, "tampered": 0}
+{"config": "damascus:gemma31:n32", "task": "abc399_d", "solved": 1, "seconds": 302.2, "tampered": 0}
+{"config": "damascus:gemma31:n32", "task": "abc399_c", "solved": 1, "seconds": 40.7, "tampered": 0}
+{"config": "damascus:gemma31:n32", "task": "arc196_b", "solved": 0, "seconds": 120.1, "tampered": 0}
+{"config": "damascus:gemma31:n32", "task": "arc196_c", "solved": 0, "seconds": 191.4, "tampered": 0}
+{"config": "damascus:gemma31:n32", "task": "arc196_a", "solved": 0, "seconds": 264.3, "tampered": 0}

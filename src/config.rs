@@ -142,23 +142,22 @@ impl ScalingConfig {
         (self.temperature + self.temperature_step * i as f32).min(1.3)
     }
 
-    /// Two-track schedule: the lower half of the rollout exploits around
-    /// `temperature` (focused), the upper half explores around
-    /// `explore_temperature` (diverse). Returns one temperature per candidate.
+    /// Temperature schedule for the N-sample rollout: spread evenly across the
+    /// *productive* range `[temperature, explore_temperature]`. Crucially, higher
+    /// N adds more samples **inside** that range (denser low-temp coverage)
+    /// rather than piling samples at a hot cap — sampling too hot collapses a
+    /// weak model's correctness, so a naive ramp made large N score *worse*.
     pub fn track_temperatures(&self, n: usize) -> Vec<f32> {
         if n == 0 {
             return Vec::new();
         }
-        let focus = n.div_ceil(2);
+        if n == 1 {
+            return vec![self.temperature];
+        }
+        let lo = self.temperature;
+        let hi = self.explore_temperature.max(self.temperature);
         (0..n)
-            .map(|i| {
-                if i < focus {
-                    (self.temperature + self.temperature_step * i as f32).min(1.1)
-                } else {
-                    let j = i - focus;
-                    (self.explore_temperature + 0.1 * j as f32).min(1.5)
-                }
-            })
+            .map(|i| lo + (hi - lo) * (i as f32 / (n - 1) as f32))
             .collect()
     }
 }
