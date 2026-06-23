@@ -1,0 +1,8 @@
+{"config": "damascus:gemini:n8", "task": "abc400_c", "solved": 1, "seconds": 49.2, "tampered": 0}
+{"config": "damascus:gemini:n8", "task": "abc400_d", "solved": 1, "seconds": 255.1, "tampered": 0}
+{"config": "damascus:gemini:n8", "task": "abc399_d", "solved": 0, "seconds": 30.3, "tampered": 0}
+{"config": "damascus:gemini:n8", "task": "abc399_c", "solved": 1, "seconds": 23.2, "tampered": 0}
+{"config": "damascus:gemini:n8", "task": "arc196_b", "solved": 1, "seconds": 183.9, "tampered": 0}
+{"config": "damascus:gemini:n8", "task": "arc196_c", "solved": 0, "seconds": 120.0, "tampered": 0}
+{"config": "damascus:gemini:n8", "task": "arc196_a", "solved": 0, "seconds": 120.0, "tampered": 0}
+{"config": "damascus:gemini:n8", "task": "arc196_d", "solved": 0, "seconds": 120.0, "tampered": 0}

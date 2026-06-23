@@ -1,3 +1,8 @@
 {"config": "gjc:gemma31", "task": "abc400_c", "solved": 1, "seconds": 420.0, "tampered": 0}
 {"config": "gjc:gemma31", "task": "abc400_d", "solved": 0, "seconds": 420.0, "tampered": 0}
 {"config": "gjc:gemma31", "task": "abc399_d", "solved": 0, "seconds": 420.0, "tampered": 0}
+{"config": "gjc:gemma31", "task": "abc399_c", "solved": 1, "seconds": 420.0, "tampered": 0}
+{"config": "gjc:gemma31", "task": "arc196_b", "solved": 0, "seconds": 420.0, "tampered": 0}
+{"config": "gjc:gemma31", "task": "arc196_c", "solved": 0, "seconds": 420.0, "tampered": 0}
+{"config": "gjc:gemma31", "task": "arc196_a", "solved": 0, "seconds": 420.0, "tampered": 0}
+{"config": "gjc:gemma31", "task": "arc196_d", "solved": 0, "seconds": 420.0, "tampered": 0}

@@ -75,6 +75,28 @@ ENSEMBLE = ["openai/gpt-oss-120b", "google/gemma-4-31b-it"]
 
 
 def write_toml(work, model, n, repair):
+    if model == "gemini":
+        # Damascus + Gemini 3.5 Flash via Google AI Studio (GEMINI_API_KEY).
+        (work / "damascus.toml").write_text(f"""
+[providers.google]
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+api_key_env = "GEMINI_API_KEY"
+[models]
+planner  = "google/gemini-3.5-flash"
+drafter  = "google/gemini-3.5-flash"
+judge    = "google/gemini-3.5-flash"
+repairer = "google/gemini-3.5-flash"
+[scaling]
+candidates = {n}
+repair_rounds = {repair}
+max_recursion = 1
+max_steps = 4
+concurrency = 12
+[verify]
+test = "{VENV_PY} run_tests.py"
+timeout_secs = 120
+""")
+        return
     if model == "ensemble":
         plan = ENSEMBLE[0]
         drafters = "[" + ", ".join(f'"openrouter/{m}"' for m in ENSEMBLE) + "]"
@@ -107,6 +129,12 @@ def build_cmd(config, work, prompt):
     if config == "opus48":
         return ["claude", "-p", "--model", "claude-opus-4-8",
                 "--permission-mode", "bypassPermissions", prompt]
+    if config == "sonnet45":
+        return ["claude", "-p", "--model", "claude-sonnet-4-5",
+                "--permission-mode", "bypassPermissions", prompt]
+    if config == "codexmini":
+        return ["codex", "exec", "--skip-git-repo-check",
+                "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.4-mini", prompt]
     if config.startswith("opencode:"):
         m = OPENROUTER_MODELS[config.split(":")[1]]
         return ["opencode", "run", "--dangerously-skip-permissions",
@@ -115,12 +143,15 @@ def build_cmd(config, work, prompt):
         m = OPENROUTER_MODELS[config.split(":")[1]]
         return ["gjc", "-p", "--model", f"openrouter/{m}",
                 "--tools", "read,write,edit,bash,find,grep", prompt]
+    if config == "gjcgemini":
+        return ["gjc", "-p", "--model", "google/gemini-3.5-flash",
+                "--tools", "read,write,edit,bash,find,grep", prompt]
     if config == "codex55":
         return ["codex", "exec", "--skip-git-repo-check",
                 "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.5", prompt]
     if config.startswith("damascus:"):
         parts = config.split(":")
-        model = "ensemble" if parts[1] == "ensemble" else OPENROUTER_MODELS[parts[1]]
+        model = parts[1] if parts[1] in ("ensemble", "gemini") else OPENROUTER_MODELS[parts[1]]
         n, repair, flags = 8, 1, []
         for tok in parts[2:]:
             if tok in ("no_slice", "no_filter", "no_decompose"):
